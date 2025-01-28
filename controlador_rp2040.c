@@ -1,13 +1,8 @@
-/* Código interrupções no microcontrolador RP2040 e explorar as
-funcionalidades da placa de desenvolvimento BitDogLab.
-Uso de interrupções
-Fenômeno do bouncing
-*/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
+#include "hardware/irq.h"
 #include "hardware/clocks.h"
 #include "ws2812.pio.h"
 
@@ -19,7 +14,8 @@ Fenômeno do bouncing
 #define LED_B_PIN 13
 #define BUTTON_A_PIN 5
 #define BUTTON_B_PIN 6
-#define TEMPO 100
+
+#define DEBOUNCE_TIME_MS 200 // Tempo de debounce em milissegundos
 
 // Mapas dos números (0-9) na matriz 5x5
 bool numbers[10][NUM_PIXELS] = {
@@ -84,7 +80,11 @@ bool numbers[10][NUM_PIXELS] = {
      1, 1, 1, 1, 1} // 9
 };
 
-static inline void put_pixel(uint32_t pixel_grb) // Exibir o pixel no LED RGB
+volatile int current_number = 0; // Variável compartilhada entre a main e as interrupções
+volatile uint32_t last_button_a_time = 0; // Armazena o timestamp da última interrupção do botão A
+volatile uint32_t last_button_b_time = 0; // Armazena o timestamp da última interrupção do botão B
+
+static inline void put_pixel(uint32_t pixel_grb)
 {
     pio_sm_put_blocking(pio0, 0, pixel_grb << 8u);
 }
@@ -94,7 +94,7 @@ static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b)
     return ((uint32_t)(r) << 8) | ((uint32_t)(g) << 16) | (uint32_t)(b);
 }
 
-void display_number(int number) // Exibir o número no LED RGB
+void display_number(int number)
 {
     for (int i = 0; i < NUM_PIXELS; i++)
     {
@@ -109,7 +109,31 @@ void display_number(int number) // Exibir o número no LED RGB
     }
 }
 
-void blink_led_rgb() // Piscar o LED RGB vermelho
+void gpio_callback(uint gpio, uint32_t events)
+{
+    uint32_t current_time = to_ms_since_boot(get_absolute_time());
+
+    if (gpio == BUTTON_A_PIN && (events & GPIO_IRQ_EDGE_FALL))
+    {
+        if (current_time - last_button_a_time > DEBOUNCE_TIME_MS)
+        {
+            last_button_a_time = current_time;
+            current_number = (current_number + 1) % 10;
+            display_number(current_number);
+        }
+    }
+    else if (gpio == BUTTON_B_PIN && (events & GPIO_IRQ_EDGE_FALL))
+    {
+        if (current_time - last_button_b_time > DEBOUNCE_TIME_MS)
+        {
+            last_button_b_time = current_time;
+            current_number = (current_number - 1 + 10) % 10;
+            display_number(current_number);
+        }
+    }
+}
+
+void blink_led_rgb()
 {
     gpio_put(LED_R_PIN, 1);
     sleep_ms(100);
@@ -119,7 +143,7 @@ void blink_led_rgb() // Piscar o LED RGB vermelho
 
 int main()
 {
-    stdio_init_all(); // Inicializa a comunicação serial
+    stdio_init_all();
 
     PIO pio = pio0;
     int sm = 0;
@@ -128,35 +152,23 @@ int main()
 
     gpio_init(LED_R_PIN);
     gpio_set_dir(LED_R_PIN, GPIO_OUT);
+
     gpio_init(BUTTON_A_PIN);
     gpio_set_dir(BUTTON_A_PIN, GPIO_IN);
     gpio_pull_up(BUTTON_A_PIN);
+    gpio_set_irq_enabled_with_callback(BUTTON_A_PIN, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
+
     gpio_init(BUTTON_B_PIN);
     gpio_set_dir(BUTTON_B_PIN, GPIO_IN);
     gpio_pull_up(BUTTON_B_PIN);
+    gpio_set_irq_enabled_with_callback(BUTTON_B_PIN, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
 
-    int current_number = 0;
+    display_number(current_number); // Inicializa o display
 
     while (1)
     {
         // Piscar o LED RGB vermelho
         blink_led_rgb();
-
-        // Verifica se o botão A foi pressionado
-        if (!gpio_get(BUTTON_A_PIN))
-        {
-            current_number = (current_number + 1) % 10;
-            display_number(current_number);
-            sleep_ms(200); // Debounce
-        }
-
-        // Verifica se o botão B foi pressionado
-        if (!gpio_get(BUTTON_B_PIN))
-        {
-            current_number = (current_number - 1 + 10) % 10;
-            display_number(current_number);
-            sleep_ms(200); // Debounce
-        }
     }
 
     return 0;
