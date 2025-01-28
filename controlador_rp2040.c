@@ -2,6 +2,7 @@
 funcionalidades da placa de desenvolvimento BitDogLab.
 Uso de interrupções
 Fenômeno do bouncing
+Controle de leds
 */
 
 #include <stdio.h>
