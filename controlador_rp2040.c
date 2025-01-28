@@ -84,7 +84,7 @@ bool numbers[10][NUM_PIXELS] = {
      1, 1, 1, 1, 1} // 9
 };
 
-static inline void put_pixel(uint32_t pixel_grb)
+static inline void put_pixel(uint32_t pixel_grb) // Exibir o pixel no LED RGB
 {
     pio_sm_put_blocking(pio0, 0, pixel_grb << 8u);
 }
@@ -94,7 +94,7 @@ static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b)
     return ((uint32_t)(r) << 8) | ((uint32_t)(g) << 16) | (uint32_t)(b);
 }
 
-void display_number(int number)
+void display_number(int number) // Exibir o número no LED RGB
 {
     for (int i = 0; i < NUM_PIXELS; i++)
     {
@@ -109,7 +109,7 @@ void display_number(int number)
     }
 }
 
-void blink_led_rgb()
+void blink_led_rgb() // Piscar o LED RGB vermelho
 {
     gpio_put(LED_R_PIN, 1);
     sleep_ms(100);
@@ -119,7 +119,7 @@ void blink_led_rgb()
 
 int main()
 {
-    stdio_init_all();
+    stdio_init_all(); // Inicializa a comunicação serial
 
     PIO pio = pio0;
     int sm = 0;
